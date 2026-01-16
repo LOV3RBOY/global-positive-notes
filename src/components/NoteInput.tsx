@@ -1,34 +1,23 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useNotesStore } from '@/store/notesStore'
-
-const placeholderMessages = [
-    "You are loved ❤️",
-    "You've got this!",
-    "Someone is thinking of you",
-    "You make the world better",
-    "Keep shining ✨",
-    "You are enough",
-    "Sending you strength",
-    "Tomorrow will be beautiful",
-]
 
 export function NoteInput() {
     const [message, setMessage] = useState('')
     const [isAnimating, setIsAnimating] = useState(false)
+    const inputRef = useRef<HTMLInputElement>(null)
     const { sendNote, totalSent } = useNotesStore()
 
     const handleSend = useCallback(() => {
-        const text = message.trim() || placeholderMessages[Math.floor(Math.random() * placeholderMessages.length)]
+        const text = message.trim() || getRandomMessage()
 
         if (text) {
             setIsAnimating(true)
             sendNote(text)
             setMessage('')
 
-            // Reset animation state
-            setTimeout(() => setIsAnimating(false), 1000)
+            setTimeout(() => setIsAnimating(false), 800)
         }
     }, [message, sendNote])
 
@@ -40,59 +29,81 @@ export function NoteInput() {
     }
 
     return (
-        <div className="ui-overlay bottom-8 left-1/2 -translate-x-1/2 w-full max-w-lg px-4">
-            <div className={`glass glow-border p-6 transition-all duration-500 ${isAnimating ? 'scale-95 opacity-80' : ''}`}>
-                {/* Header */}
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-medium text-white/90">Send a Positive Note</h2>
-                    <span className="text-sm text-white/40">
-                        {totalSent.toLocaleString()} sent worldwide
-                    </span>
-                </div>
+        <div className="ui-layer bottom-12 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6">
+            {/* Main input container */}
+            <div className={`glass-minimal rounded-full p-2 transition-all duration-500 ${isAnimating ? 'scale-[0.98] opacity-80' : ''
+                }`}>
+                <div className="flex items-center gap-3">
+                    {/* Search/input icon */}
+                    <div className="pl-4">
+                        <svg
+                            className="w-5 h-5 text-white/40"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.5}
+                                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                            />
+                        </svg>
+                    </div>
 
-                {/* Input */}
-                <div className="relative">
+                    {/* Input field */}
                     <input
+                        ref={inputRef}
                         type="text"
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="Type your message or press send for a random note..."
-                        className="input-glass pr-24"
+                        placeholder="Send a positive note to someone on Earth..."
+                        className="flex-1 bg-transparent border-none outline-none text-white/90 text-sm placeholder:text-white/30 py-3"
                         maxLength={140}
                     />
 
-                    {/* Send Button */}
+                    {/* Send button */}
                     <button
                         onClick={handleSend}
                         disabled={isAnimating}
-                        className={`absolute right-2 top-1/2 -translate-y-1/2 btn-glow py-2 px-4 text-sm ${isAnimating ? 'opacity-50 cursor-not-allowed' : ''
+                        className={`btn-send flex items-center gap-2 ${isAnimating ? 'opacity-50' : ''
                             }`}
                     >
                         {isAnimating ? (
-                            <span className="flex items-center gap-2">
-                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                </svg>
-                                Sending
-                            </span>
+                            <span className="w-4 h-4 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
                         ) : (
-                            <span className="flex items-center gap-2">
-                                Send
+                            <>
+                                <span>Send</span>
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                 </svg>
-                            </span>
+                            </>
                         )}
                     </button>
                 </div>
-
-                {/* Helper text */}
-                <p className="text-xs text-white/30 mt-3 text-center">
-                    Your note will travel to a random location on Earth
-                </p>
             </div>
+
+            {/* Subtle helper text */}
+            <p className="text-center text-[11px] text-white/20 mt-4 tracking-wide">
+                Press Enter to send • {totalSent.toLocaleString()} notes sent worldwide
+            </p>
         </div>
     )
+}
+
+function getRandomMessage(): string {
+    const messages = [
+        "You are loved ❤️",
+        "You've got this",
+        "Someone believes in you",
+        "You make the world better",
+        "Keep going, you're doing great",
+        "You are enough",
+        "Sending you strength",
+        "Tomorrow holds promise",
+        "You matter more than you know",
+        "Your story isn't over yet",
+    ]
+    return messages[Math.floor(Math.random() * messages.length)]
 }
