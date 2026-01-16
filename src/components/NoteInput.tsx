@@ -1,55 +1,88 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useNotesStore } from '@/store/notesStore'
+
+const MESSAGES = [
+    "You are enough",
+    "Someone believes in you",
+    "Your presence matters",
+    "You bring light to others",
+    "Keep going, you're doing beautifully",
+    "The world is better with you in it",
+    "You are worthy of love",
+    "Your story is still being written",
+]
 
 export function NoteInput() {
     const [message, setMessage] = useState('')
-    const [isAnimating, setIsAnimating] = useState(false)
+    const [isSending, setIsSending] = useState(false)
+    const [recentlySent, setRecentlySent] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
     const { sendNote, totalSent } = useNotesStore()
 
-    const handleSend = useCallback(() => {
-        const text = message.trim() || getRandomMessage()
+    const handleSend = useCallback(async () => {
+        if (isSending) return
 
-        if (text) {
-            setIsAnimating(true)
-            sendNote(text)
-            setMessage('')
+        const text = message.trim() || MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
 
-            setTimeout(() => setIsAnimating(false), 800)
-        }
-    }, [message, sendNote])
+        setIsSending(true)
+
+        // Sophisticated delay for visual feedback
+        await new Promise(resolve => setTimeout(resolve, 600))
+
+        sendNote(text)
+        setMessage('')
+        setIsSending(false)
+        setRecentlySent(true)
+
+        // Reset the success state
+        setTimeout(() => setRecentlySent(false), 2000)
+    }, [message, sendNote, isSending])
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Enter' && !e.shiftKey && !isSending) {
             e.preventDefault()
             handleSend()
         }
     }
 
+    // Focus input on mount
+    useEffect(() => {
+        const timer = setTimeout(() => inputRef.current?.focus(), 1000)
+        return () => clearTimeout(timer)
+    }, [])
+
     return (
-        <div className="ui-layer bottom-12 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6">
-            {/* Main input container */}
-            <div className={`glass-minimal rounded-full p-2 transition-all duration-500 ${isAnimating ? 'scale-[0.98] opacity-80' : ''
-                }`}>
-                <div className="flex items-center gap-3">
-                    {/* Search/input icon */}
-                    <div className="pl-4">
-                        <svg
-                            className="w-5 h-5 text-white/40"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={1.5}
-                                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                            />
-                        </svg>
-                    </div>
+        <div className="ui-layer bottom-16 left-1/2 -translate-x-1/2 w-full max-w-xl px-8">
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.5 }}
+            >
+                {/* Input container */}
+                <motion.div
+                    className="input-container"
+                    animate={{
+                        scale: isSending ? 0.98 : 1,
+                        opacity: isSending ? 0.8 : 1,
+                    }}
+                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                >
+                    {/* Subtle accent indicator */}
+                    <motion.div
+                        className="w-1.5 h-1.5 rounded-full"
+                        animate={{
+                            backgroundColor: recentlySent
+                                ? 'rgba(120, 200, 150, 0.8)'
+                                : 'rgba(255, 215, 180, 0.5)',
+                            boxShadow: recentlySent
+                                ? '0 0 12px rgba(120, 200, 150, 0.5)'
+                                : '0 0 8px rgba(255, 215, 180, 0.3)',
+                        }}
+                        transition={{ duration: 0.6 }}
+                    />
 
                     {/* Input field */}
                     <input
@@ -58,52 +91,80 @@ export function NoteInput() {
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="Send a positive note to someone on Earth..."
-                        className="flex-1 bg-transparent border-none outline-none text-white/90 text-sm placeholder:text-white/30 py-3"
-                        maxLength={140}
+                        placeholder="Share something kind with the world..."
+                        className="input-field"
+                        maxLength={120}
+                        disabled={isSending}
                     />
 
                     {/* Send button */}
-                    <button
+                    <motion.button
                         onClick={handleSend}
-                        disabled={isAnimating}
-                        className={`btn-send flex items-center gap-2 ${isAnimating ? 'opacity-50' : ''
-                            }`}
+                        disabled={isSending}
+                        className="btn-primary"
+                        whileTap={{ scale: 0.96 }}
+                        transition={{ duration: 0.1 }}
                     >
-                        {isAnimating ? (
-                            <span className="w-4 h-4 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
-                        ) : (
-                            <>
-                                <span>Send</span>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                </svg>
-                            </>
-                        )}
-                    </button>
-                </div>
-            </div>
+                        <AnimatePresence mode="wait">
+                            {isSending ? (
+                                <motion.div
+                                    key="loading"
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="loader"
+                                />
+                            ) : (
+                                <motion.span
+                                    key="text"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                >
+                                    Send
+                                </motion.span>
+                            )}
+                        </AnimatePresence>
+                    </motion.button>
+                </motion.div>
 
-            {/* Subtle helper text */}
-            <p className="text-center text-[11px] text-white/20 mt-4 tracking-wide">
-                Press Enter to send • {totalSent.toLocaleString()} notes sent worldwide
-            </p>
+                {/* Status text */}
+                <motion.div
+                    className="mt-6 text-center"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 1, duration: 1 }}
+                >
+                    <AnimatePresence mode="wait">
+                        {recentlySent ? (
+                            <motion.p
+                                key="success"
+                                initial={{ opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -4 }}
+                                transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                                className="text-caption"
+                                style={{ color: 'rgba(120, 200, 150, 0.7)' }}
+                            >
+                                Note sent across the globe
+                            </motion.p>
+                        ) : (
+                            <motion.p
+                                key="hint"
+                                initial={{ opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -4 }}
+                                transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                                className="text-caption"
+                            >
+                                Press Enter to send · {totalSent.toLocaleString()} notes shared
+                            </motion.p>
+                        )}
+                    </AnimatePresence>
+                </motion.div>
+            </motion.div>
         </div>
     )
-}
-
-function getRandomMessage(): string {
-    const messages = [
-        "You are loved ❤️",
-        "You've got this",
-        "Someone believes in you",
-        "You make the world better",
-        "Keep going, you're doing great",
-        "You are enough",
-        "Sending you strength",
-        "Tomorrow holds promise",
-        "You matter more than you know",
-        "Your story isn't over yet",
-    ]
-    return messages[Math.floor(Math.random() * messages.length)]
 }

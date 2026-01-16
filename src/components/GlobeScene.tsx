@@ -1,188 +1,217 @@
 'use client'
 
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import createGlobe from 'cobe'
-import { useNotesStore } from '@/store/notesStore'
+import { useNotesStore, Note } from '@/store/notesStore'
 
 export default function GlobeScene() {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const pointerInteracting = useRef<number | null>(null)
     const pointerInteractionMovement = useRef(0)
     const phiRef = useRef(0)
-    const widthRef = useRef(0)
     const globeRef = useRef<ReturnType<typeof createGlobe> | null>(null)
 
-    const { flyingNotes, landedNotes } = useNotesStore()
-    const [markers, setMarkers] = useState<Array<{ location: [number, number]; size: number }>>([])
+    const { flyingNotes, landedNotes, setUserLocation } = useNotesStore()
 
-    // Convert landed notes to markers
-    useEffect(() => {
-        const newMarkers = landedNotes.slice(-30).map(note => ({
+    // Convert landed notes to globe markers
+    const markers = useMemo(() =>
+        landedNotes.slice(-40).map(note => ({
             location: [note.lat, note.lng] as [number, number],
-            size: 0.03 + Math.random() * 0.02,
-        }))
-        setMarkers(newMarkers)
-    }, [landedNotes])
+            size: 0.02 + Math.random() * 0.015,
+        })),
+        [landedNotes]
+    )
 
-    // Handle resize
+    // Get user location on mount
     useEffect(() => {
-        const onResize = () => {
-            if (canvasRef.current) {
-                widthRef.current = canvasRef.current.offsetWidth
-            }
+        if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => setUserLocation(pos.coords.latitude, pos.coords.longitude),
+                () => setUserLocation(40.7128, -74.0060)
+            )
         }
-        window.addEventListener('resize', onResize)
-        onResize()
-        return () => window.removeEventListener('resize', onResize)
-    }, [])
+    }, [setUserLocation])
 
-    // Initialize COBE globe
+    // Initialize globe
     useEffect(() => {
         if (!canvasRef.current) return
 
         let phi = 0
-        const canvas = canvasRef.current
+        let width = 0
 
-        // Set canvas size
-        const size = Math.min(window.innerWidth, window.innerHeight) * 1.2
-        canvas.width = size * 2
-        canvas.height = size * 2
-        canvas.style.width = `${size}px`
-        canvas.style.height = `${size}px`
+        const onResize = () => {
+            if (canvasRef.current) {
+                width = canvasRef.current.offsetWidth
+            }
+        }
+        window.addEventListener('resize', onResize)
+        onResize()
 
-        globeRef.current = createGlobe(canvas, {
+        globeRef.current = createGlobe(canvasRef.current, {
             devicePixelRatio: 2,
-            width: size * 2,
-            height: size * 2,
+            width: 1200,
+            height: 1200,
             phi: 0,
-            theta: 0.2,
+            theta: 0.15,
             dark: 1,
-            diffuse: 1.2,
-            mapSamples: 24000, // High sample count for detailed point-cloud
-            mapBrightness: 8,
-            baseColor: [0.15, 0.15, 0.18], // Dark base
-            markerColor: [1, 0.8, 0.6], // Warm golden glow for markers
-            glowColor: [0.08, 0.08, 0.12], // Subtle dark blue glow
+            diffuse: 1.4,
+            mapSamples: 32000,
+            mapBrightness: 6,
+            baseColor: [0.12, 0.12, 0.14],
+            markerColor: [1.0, 0.85, 0.7],
+            glowColor: [0.06, 0.06, 0.08],
             markers: markers,
             onRender: (state) => {
-                // Smooth auto-rotation with pointer interaction
                 if (!pointerInteracting.current) {
-                    phi += 0.002
+                    phi += 0.0015
                 }
                 state.phi = phi + pointerInteractionMovement.current
-                state.width = widthRef.current * 2
-                state.height = widthRef.current * 2
+                state.width = width * 2
+                state.height = width * 2
             },
         })
 
         return () => {
+            window.removeEventListener('resize', onResize)
             globeRef.current?.destroy()
         }
     }, [markers])
 
-    // Pointer handlers for drag interaction
-    const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    // Pointer handlers
+    const onPointerDown = useCallback((e: React.PointerEvent) => {
         pointerInteracting.current = e.clientX - pointerInteractionMovement.current
-        if (canvasRef.current) {
-            canvasRef.current.style.cursor = 'grabbing'
-        }
+        if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing'
     }, [])
 
-    const handlePointerUp = useCallback(() => {
+    const onPointerUp = useCallback(() => {
         pointerInteracting.current = null
-        if (canvasRef.current) {
-            canvasRef.current.style.cursor = 'grab'
-        }
+        if (canvasRef.current) canvasRef.current.style.cursor = 'grab'
     }, [])
 
-    const handlePointerOut = useCallback(() => {
-        pointerInteracting.current = null
-        if (canvasRef.current) {
-            canvasRef.current.style.cursor = 'grab'
-        }
-    }, [])
-
-    const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    const onPointerMove = useCallback((e: React.PointerEvent) => {
         if (pointerInteracting.current !== null) {
             const delta = e.clientX - pointerInteracting.current
-            pointerInteractionMovement.current = delta / 100
+            pointerInteractionMovement.current = delta / 150
+            phiRef.current += delta / 150
         }
     }, [])
 
     return (
-        <div className="globe-canvas flex items-center justify-center">
-            <canvas
+        <div className="globe-viewport">
+            {/* Globe canvas */}
+            <motion.canvas
                 ref={canvasRef}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 2, ease: [0.16, 1, 0.3, 1] }}
                 className="cursor-grab"
-                onPointerDown={handlePointerDown}
-                onPointerUp={handlePointerUp}
-                onPointerOut={handlePointerOut}
-                onPointerMove={handlePointerMove}
+                onPointerDown={onPointerDown}
+                onPointerUp={onPointerUp}
+                onPointerOut={onPointerUp}
+                onPointerMove={onPointerMove}
                 style={{
-                    maxWidth: '100vw',
-                    maxHeight: '100vh',
-                    aspectRatio: '1',
+                    width: '100%',
+                    height: '100%',
+                    maxWidth: '800px',
+                    maxHeight: '800px',
+                    contain: 'layout paint size',
                 }}
             />
 
-            {/* Arc overlay for flying notes */}
-            {flyingNotes.length > 0 && (
-                <div className="fixed inset-0 pointer-events-none z-20">
-                    <svg className="w-full h-full">
-                        {flyingNotes.map((note, i) => (
-                            <ArcPath key={note.id} note={note} index={i} />
-                        ))}
-                    </svg>
-                </div>
-            )}
+            {/* Flying notes visualization */}
+            <AnimatePresence>
+                {flyingNotes.map((note) => (
+                    <FlyingNoteArc key={note.id} note={note} />
+                ))}
+            </AnimatePresence>
         </div>
     )
 }
 
-// Animated arc component
-function ArcPath({ note, index }: { note: any; index: number }) {
-    const elapsed = Date.now() - note.timestamp
-    const progress = Math.min(elapsed / 3000, 1) // 3 second flight
+// Sophisticated arc animation for flying notes
+function FlyingNoteArc({ note }: { note: Note }) {
+    const [progress, setProgress] = useState(0)
 
-    // Simple bezier path (you'd calculate this from lat/lng in production)
-    const cx = window.innerWidth / 2
-    const cy = window.innerHeight / 2
-    const startAngle = (note.startLng + 180) * (Math.PI / 180)
-    const endAngle = (note.endLng + 180) * (Math.PI / 180)
-    const radius = Math.min(window.innerWidth, window.innerHeight) * 0.3
+    useEffect(() => {
+        const startTime = note.timestamp
+        const duration = 3000
+
+        const animate = () => {
+            const elapsed = Date.now() - startTime
+            const p = Math.min(elapsed / duration, 1)
+            setProgress(p)
+
+            if (p < 1) {
+                requestAnimationFrame(animate)
+            }
+        }
+
+        requestAnimationFrame(animate)
+    }, [note.timestamp])
+
+    // Calculate arc path
+    const cx = typeof window !== 'undefined' ? window.innerWidth / 2 : 600
+    const cy = typeof window !== 'undefined' ? window.innerHeight / 2 : 400
+    const radius = Math.min(cx, cy) * 0.35
+
+    const startAngle = ((note.startLng + 180) / 360) * Math.PI * 2
+    const endAngle = ((note.endLng + 180) / 360) * Math.PI * 2
 
     const x1 = cx + Math.cos(startAngle) * radius
-    const y1 = cy + Math.sin(startAngle) * radius * 0.6
+    const y1 = cy + Math.sin(startAngle) * radius * 0.5
     const x2 = cx + Math.cos(endAngle) * radius
-    const y2 = cy + Math.sin(endAngle) * radius * 0.6
+    const y2 = cy + Math.sin(endAngle) * radius * 0.5
 
-    const midX = (x1 + x2) / 2
-    const midY = Math.min(y1, y2) - 100 // Arc height
+    // Bezier control point for arc
+    const cpX = (x1 + x2) / 2
+    const cpY = Math.min(y1, y2) - 80
 
-    const pathD = `M ${x1} ${y1} Q ${midX} ${midY} ${x2} ${y2}`
+    // Current position on curve (quadratic bezier)
+    const t = progress
+    const currentX = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * cpX + t * t * x2
+    const currentY = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * cpY + t * t * y2
+
+    // Easing function for opacity
+    const opacity = progress < 0.1
+        ? progress * 10
+        : progress > 0.9
+            ? (1 - progress) * 10
+            : 1
 
     return (
-        <g>
-            <path
-                d={pathD}
-                fill="none"
-                stroke={`rgba(255, 200, 150, ${0.6 - progress * 0.5})`}
-                strokeWidth="2"
-                strokeDasharray="5 3"
-                style={{
-                    filter: 'drop-shadow(0 0 6px rgba(255, 200, 150, 0.8))',
-                }}
-            />
-            {/* Moving dot */}
-            <circle
-                cx={x1 + (x2 - x1) * progress}
-                cy={y1 + (midY - y1) * 2 * progress * (1 - progress) + (y2 - y1) * progress * progress}
-                r="4"
-                fill="rgba(255, 220, 180, 1)"
-                style={{
-                    filter: 'drop-shadow(0 0 10px rgba(255, 200, 150, 1))',
-                }}
-            />
-        </g>
+        <motion.div
+            className="fixed inset-0 pointer-events-none z-20"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+        >
+            <svg className="w-full h-full" style={{ overflow: 'visible' }}>
+                {/* Trail path */}
+                <motion.path
+                    d={`M ${x1} ${y1} Q ${cpX} ${cpY} ${x2} ${y2}`}
+                    fill="none"
+                    stroke={`rgba(255, 215, 180, ${opacity * 0.15})`}
+                    strokeWidth="1"
+                    strokeDasharray="4 6"
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: progress }}
+                    transition={{ duration: 0.1, ease: "linear" }}
+                />
+
+                {/* Glowing particle */}
+                <motion.circle
+                    cx={currentX}
+                    cy={currentY}
+                    r="3"
+                    fill={`rgba(255, 220, 190, ${opacity})`}
+                    style={{
+                        filter: `drop-shadow(0 0 4px rgba(255, 215, 180, ${opacity})) 
+                     drop-shadow(0 0 8px rgba(255, 200, 160, ${opacity * 0.6}))`,
+                    }}
+                />
+            </svg>
+        </motion.div>
     )
 }
